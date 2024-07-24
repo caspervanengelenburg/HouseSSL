@@ -1,1 +1,1 @@
-# **HouseSSL**: Self-supervised Similarity Learning of Floor Layouts
+# **HouseSSL**: Self-Supervised Similarity Learning of Floor Layouts
