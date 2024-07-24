@@ -14,11 +14,7 @@ def plot_shapes(ax, polygons, colors, **kwargs):
 
 
 # Plot a floor plan graph
-def plot_graph(G, ax,
-               c_node='black', c_edge='black',  # coloring
-               dw_edge=False, pos=None,  # edge type and node positioning
-               node_size=10, edge_size=10,
-               shapes=None, **kwargs):  # node and edge sizes
+def plot_graph(G, ax, fs):  # node and edge sizes
 
     """
     Plots the topological graph structure of a floor plan.
@@ -28,32 +24,30 @@ def plot_graph(G, ax,
     Node positions are in 2D and could be for example the room centroids.
     """
 
-    # Determine node position (if None is given)
-    if pos is None:
-        pos = nx.spring_layout(G, seed=7)  # random position for the nodes
+    # Get and make-up axis
+    _ = ax.axes.set_aspect('equal')
 
-    if shapes is not None:
-        for poly, cat in zip(shapes):
-            plot_polygon(ax, Polygon(poly), color=np.array(CMAP_RPLAN(cat)).reshape(1, 4), **kwargs)
+    pos = {n: np.array(geom[:2]) for n, geom in G.nodes("geometry")}
+    categories = [label for _, label in G.nodes("category")]
+    colors = [np.array(CMAP_RPLAN(cat)).reshape(1, 4) for cat in categories]
+
+    # Get shapes and plot them as well
+    # Not possible to do this, because polygons are not saved in the graphs!
+    shapes = [Polygon(shape) for _, shape in G.nodes("polygon")]
+    plot_shapes(ax, shapes, colors, ec="black", lw=0, alpha=1)
 
     # Draw nodes
-    nx.draw_networkx_nodes(G, pos, node_size=node_size, node_color=c_node, ax=ax)
+    nx.draw_networkx_nodes(G, pos, node_size=fs * 40, node_color="black", ax=ax)
 
-    # Draw edges
-    if dw_edge:
+    # Draw edges (door)
+    edges = [(u, v) for (u, v, d) in G.edges(data="door") if d == 1]
+    nx.draw_networkx_edges(nx.Graph(G), pos, edgelist=edges, edge_color='black',
+                           width=fs / 2, ax=ax)
 
-        # Door connections
-        edges = [(u, v) for (u, v, d) in G.edges(data="door") if int(d) == 1]
-        nx.draw_networkx_edges(G, pos, edgelist=edges, edge_color=c_edge,
-                               width=edge_size, ax=ax)
-
-        # Adjacent connections
-        edges = [(u, v) for (u, v, d) in G.edges(data="door") if int(d) == 0]
-        nx.draw_networkx_edges(G, pos, edgelist=edges, edge_color=c_edge,
-                               width=edge_size, style="dashed", ax=ax)
-    else:
-        nx.draw_networkx_edges(G, pos, edge_color=c_edge,
-                               width=edge_size, ax=ax)
+    # Draw edges (adjacency)
+    edges = [(u, v) for (u, v, d) in G.edges(data="door") if d == 0]
+    nx.draw_networkx_edges(nx.Graph(G), pos, edgelist=edges, edge_color='white',
+                           width=fs / 2, ax=ax)
 
 
 def plot_graph_msd(G, ax, c_node='black', c_edge=['white']*4, dw_edge=False, pos=None, node_size=10,
