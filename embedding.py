@@ -1,4 +1,5 @@
 # general imports
+import copy
 import numpy as np
 import torch
 from tqdm.auto import tqdm
@@ -57,7 +58,7 @@ def get_features(model, dataloader, device='cuda:0' if torch.cuda.is_available()
     return ids, feats
 
 
-def get_embeddings_gcn(graphs, model, device='cpu'):
+def get_embeddings(graphs, model, device='cpu'):
 
     # set model to eval mode; no randomness
     model.eval()
@@ -65,27 +66,35 @@ def get_embeddings_gcn(graphs, model, device='cpu'):
     # initialize list of names and embeddings
     names, embeddings = [], []
 
-    for graph in tqdm(graphs):
+    for graph in tqdm(graphs, total=len(graphs)):
 
-        # convert graph to pytorch geometric
-        graph = from_networkx(remove_attributes_from_graph(graph, ['polygon']))
+        G = copy.deepcopy(graph)
 
-        # extract information from batched data
-        edge_index = graph['edge_index'].to(device)
-        x_geom = graph['geometry'].float().to(device)
-        x_cats = graph['category'].long().to(device)
-        edge_feats = graph['inter-geometry'].float().to(device)
-        batch = torch.zeros(x_geom.size()[0], dtype=torch.int64).to(device)
+        id = G.graph["name"]
 
-        # inference; get representations
-        with torch.no_grad():
-            _, graph_feats = model(edge_index, x_geom, x_cats, edge_feats, batch)
+        try:
+            # Convert to PyG graph
+            G = remove_attributes_from_graph(G, ["polygon"])
+            G = from_networkx(G)
 
-        # append to lists
-        embeddings.append(graph_feats)
-        names.append(graph['name'])
+            # Prepare the data
+            edge_index = G['edge_index'].to(device)
+            x_geom = G['geometry'].float().to(device)
+            x_cats = G['category'].long().to(device)
+            edge_feats = G['door'].long()
+            batch = torch.zeros(x_geom.size()[0], dtype=torch.int64).to(device)
 
-    # concatenate embeddings list to tensor
+            # Feedforward to get graph-level feature vectors
+            with torch.no_grad():
+                _, graph_feats = model(edge_index, x_cats, x_geom, edge_feats, batch)
+
+            # Append to list
+            embeddings.append(graph_feats)
+            names.append(G["name"])
+        except:
+            print(f"Not possible for:\t{id}\n")
+
+    # Concatenate embeddings into a vector
     embeddings = torch.cat(embeddings, dim=0)
 
     return names, embeddings
